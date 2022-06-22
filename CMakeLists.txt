@@ -27,32 +27,15 @@ include_directories(
   ${LIB_DIR}
 )
 
-add_executable(format "${SRC_DIR}/format_data.cc")
-add_executable(gen "${SRC_DIR}/data_generator.cc")
-add_executable(nf_convert "${SRC_DIR}/nf_data_converter.cc")
-
+add_executable(format "${SRC_DIR}/util/format_data.cc")
+add_executable(gen "${SRC_DIR}/util/data_generator.cc")
+add_executable(nf_convert "${SRC_DIR}/util/nf_data_converter.cc")
 add_executable(evaluate "${SRC_DIR}/main.cc")
-add_executable(evaluate_nf "${SRC_DIR}/evaluate_nf.cc")
-
-add_executable(test_nfl "${SRC_DIR}/test/test_nfl.cc")
-add_executable(test_afli "${SRC_DIR}/test/test_afli.cc")
-add_executable(test_bnaf "${SRC_DIR}/test/test_numerical_flow.cc")
-add_executable(test_lm "${SRC_DIR}/test/test_linear_model.cc")
-
-add_executable(cache_workload "${SRC_DIR}/analysis/cache_workload.cc")
-add_executable(aggregation "${SRC_DIR}/analysis/aggregation.cc")
-# add_executable(update_index "${SRC_DIR}/analysis/update_index.cc")
 
 find_package(MKL)
 if (MKL_FOUND)
   include_directories(${MKL_INCLUDE_DIR})
   target_link_libraries(evaluate ${MKL_LIBRARIES})
-  target_link_libraries(evaluate_nf ${MKL_LIBRARIES})
-  target_link_libraries(test_bnaf ${MKL_LIBRARIES})
-  target_link_libraries(test_lm ${MKL_LIBRARIES})
-  target_link_libraries(test_nfl ${MKL_LIBRARIES})
-  target_link_libraries(aggregation ${MKL_LIBRARIES})
-  # target_link_libraries(update_index ${MKL_LIBRARIES})
 else ()
   message(WARNING "MKL libs not found")
 endif ()

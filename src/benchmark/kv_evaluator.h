@@ -13,22 +13,114 @@
 
 namespace kvevaluator {
 
-enum ResultType {
-  kSuccess = 0,
-  kFail = 1,
-  kNotFound = 2
+struct LIPPConfig {
+  LIPPConfig(std::string path) { }
 };
 
-template<typename KT, typename VT>
-struct Status {
-  ResultType state;
-  std::pair<KT, VT> kv;
+struct AlexConfig {
+  AlexConfig(std::string path) { }
+};
 
-  Status() : state(kSuccess) { }
+struct PGMConfig {
+  int base;
+  int buffer_level;
+  int index_level;
 
-  Status(ResultType rt, KT key, VT val) : state(rt), kv({key, val}) { }
+  PGMConfig(std::string path) {
+    base = 8;
+    buffer_level = 0;
+    index_level = 0;
+    if (path != "") {
+      std::ifstream in(path, std::ios::in);
+      if (in.is_open()) {
+        while (!in.eof()) {
+          std::string kv;
+          in >> kv;
+          std::string::size_type n = kv.find("=");
+          if (n != std::string::npos) {
+            std::string key = kv.substr(0, n);
+            std::string val = kv.substr(n + 1);
+            if (key == "base") {
+              base = STRTONUM<std::string, int>(val);
+            } else if (key == "buffer_level") {
+              buffer_level = STRTONUM<std::string, int>(val);
+            } else if (key == "index_level") {
+              index_level = STRTONUM<std::string, int>(val);
+            }
+          }
+        }
+        in.close();
+      }
+    }
+  }
+};
 
-  Status(ResultType rt) : state(rt) { }
+struct BTreeConfig {
+  BTreeConfig(std::string path) { }
+};
+
+struct AFLIConfig {
+  int bucket_size;
+  int aggregate_size;
+
+  AFLIConfig(std::string path) {
+    bucket_size = -1;
+    aggregate_size = 0;
+    if (path != "") {
+      std::ifstream in(path, std::ios::in);
+      if (in.is_open()) {
+        while (!in.eof()) {
+          std::string kv;
+          in >> kv;
+          std::string::size_type n = kv.find("=");
+          if (n != std::string::npos) {
+            std::string key = kv.substr(0, n);
+            std::string val = kv.substr(n + 1);
+            if (key == "bucket_size") {
+              bucket_size = STRTONUM<std::string, int>(val);
+            } else if (key == "aggregate_size") {
+              aggregate_size = STRTONUM<std::string, int>(val);
+            }
+          }
+        }
+        in.close();
+      }
+    }
+  }
+};
+
+struct NFLConfig {
+  int bucket_size;
+  int aggregate_size;
+  std::string weights_path;
+
+  NFLConfig(std::string path) {
+    bucket_size = -1;
+    aggregate_size = 0;
+    weights_path = "";
+    if (path != "") {
+      std::ifstream in(path, std::ios::in);
+      if (in.is_open()) {
+        while (!in.eof()) {
+          std::string kv;
+          in >> kv;
+          std::string::size_type n = kv.find("=");
+          if (n != std::string::npos) {
+            std::string key = kv.substr(0, n);
+            std::string val = kv.substr(n + 1);
+            if (key == "bucket_size") {
+              bucket_size = STRTONUM<std::string, int>(val);
+            } else if (key == "aggregate_size") {
+              aggregate_size = STRTONUM<std::string, int>(val);
+            } else if (key == "weights_path") {
+              weights_path = val;
+            }
+          }
+        }
+        in.close();
+      }
+    }
+  }
 };
 
 template<typename KT, typename VT>
@@ -42,7 +134,7 @@ public:
   const double conflicts_decay = 0.1;
 
   void TestWorkloads(std::string index_name, int batch_size, 
-                    std::string workload_path, std::string weights_path="",
+                    std::string workload_path, std::string config_path="",
                     bool show_incremental_throughputs=false) {
     load_data.clear();
     reqs.clear();
@@ -64,46 +156,48 @@ public:
     bool categorical_keys = false;
     if (categorical_keys) {
       std::set<KT> key_set;
-      for (uint32_t i = 0; i < load_data.size(); ++ i) {
+      for (int i = 0; i < load_data.size(); ++ i) {
         key_set.insert(load_data[i].first);
       }
-      for (uint32_t i = 0; i < reqs.size(); ++ i) {
+      for (int i = 0; i < reqs.size(); ++ i) {
         key_set.insert(reqs[i].kv.first);
       }
       std::vector<KT> key_array;
       key_array.reserve(key_set.size());
       key_array.insert(key_array.end(), key_set.begin(), key_set.end());
-      for (uint32_t i = 0; i < load_data.size(); ++ i) {
-        KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), load_data[i].first) - key_array.begin();
+      for (int i = 0; i < load_data.size(); ++ i) {
+        KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), 
+                                      load_data[i].first) - key_array.begin();
         load_data[i] = {opt_key, load_data[i].second};
       }
-      for (uint32_t i = 0; i < reqs.size(); ++ i) {
-        KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), reqs[i].kv.first) - key_array.begin();
+      for (int i = 0; i < reqs.size(); ++ i) {
+        KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), 
+                                      reqs[i].kv.first) - key_array.begin();
         reqs[i].kv = {opt_key, reqs[i].kv.second};
       }
     }
     // Start to evaluate
     bool show_stat = false;
-    bool check_correctness = false;
     ExperimentalResults exp_res(batch_size);
     if (StartWith(index_name, "lipp")) {
-      TestLIPP(batch_size, exp_res, show_stat, check_correctness);
+      TestLIPP(batch_size, exp_res, config_path, show_stat);
     } else if (StartWith(index_name, "alex")) {
-      TestAlex(batch_size, exp_res, show_stat, check_correctness);
+      TestAlex(batch_size, exp_res, config_path, show_stat);
     } else if (StartWith(index_name, "pgm-index")) {
-      TestPGMIndex(batch_size, exp_res, show_stat, check_correctness);
+      TestPGM(batch_size, exp_res, config_path, show_stat);
     } else if (StartWith(index_name, "btree")) {
-      TestBTree(batch_size, exp_res, show_stat, check_correctness);
+      TestBTree(batch_size, exp_res, config_path, show_stat);
     } else if (StartWith(index_name, "afli")) {
-      TestAFLI(batch_size, exp_res, show_stat, check_correctness);
+      TestAFLI(batch_size, exp_res, config_path, show_stat);
     } else if (StartWith(index_name, "nfl")) {
-      TestNFL(batch_size, exp_res, weights_path, show_stat, check_correctness);
+      TestNFL(batch_size, exp_res, config_path, show_stat);
     } else {
       std::cout << "Unsupported model name [" << index_name << "]" << std::endl;
       exit(-1);
     }
     // Print results.
-    std::cout << workload_name << "\t" << index_name << "\t" << batch_size << std::endl;
+    std::cout << workload_name << "\t" << index_name << "\t" << batch_size 
+              << std::endl;
     if (show_incremental_throughputs) {
       exp_res.show_incremental_throughputs();
     } else {
@@ -112,31 +206,33 @@ public:
   }
 
   void TestLIPP(int batch_size, ExperimentalResults& exp_res, 
-                bool show_stat=false, bool check_correctness=true) {
+                std::string config_path, bool show_stat=false) {
+    // Load config
+    LIPPConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     LIPP<KT, VT> lipp;
     lipp.bulk_load(load_data.data(), load_data.size());      
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_start).count();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                    - bulk_load_start).count();
 
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
       for (int i = l; i < r; ++ i) {
         batch_data.push_back(reqs[i].kv);
       }
+
       VT val_sum = 0;
       // Perform requests
       auto start = std::chrono::high_resolution_clock::now();
@@ -144,7 +240,7 @@ public:
         int data_idx = i - l;
         if (reqs[i].op == kQuery) {
           VT res = lipp.at(batch_data[data_idx].first);
-          val_sum += res;          
+          val_sum += res;
         } else if (reqs[i].op == kUpdate) {
           VT res = lipp.at(batch_data[data_idx].first);
         } else if (reqs[i].op == kInsert) {
@@ -155,25 +251,12 @@ public:
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
-      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end 
+                                                              - start).count();
       exp_res.sum_indexing_time += time;
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({0, time});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = lipp.model_size();
     exp_res.index_size = lipp.index_size();
@@ -183,32 +266,32 @@ public:
   }
 
   void TestAlex(int batch_size, ExperimentalResults& exp_res, 
-                bool show_stat=false, bool check_correctness=true) {
+                std::string config_path, bool show_stat=false) {
+    AlexConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     alex::Alex<KT, VT> alex;
     alex.bulk_load(load_data.data(), load_data.size());
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_start).count();
-    // alex.print_stats();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                    - bulk_load_start).count();
     
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
       for (int i = l; i < r; ++ i) {
         batch_data.push_back(reqs[i].kv);
       }
+
       VT val_sum = 0;
       // Perform requests
       auto start = std::chrono::high_resolution_clock::now();
@@ -231,25 +314,12 @@ public:
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
-      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end 
+                                                              - start).count();
       exp_res.sum_indexing_time += time;
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({0, time});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = alex.model_size();
     exp_res.index_size = alex.model_size() + alex.data_size();
@@ -258,25 +328,27 @@ public:
     }
   }
 
-  void TestPGMIndex(int batch_size, ExperimentalResults& exp_res, 
-                    bool show_stat=false, bool check_correctness=true) {
+  void TestPGM(int batch_size, ExperimentalResults& exp_res, 
+                std::string config_path, bool show_stat=false) {
+    PGMConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
-    pgm::DynamicPGMIndex<KT, VT> pgm_index(load_data.begin(), load_data.end());
+    pgm::DynamicPGMIndex<KT, VT, pgm::PGMIndex<KT, 16>> pgm_index(
+      load_data.begin(), load_data.end(), config.base, config.buffer_level, 
+      config.index_level);
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_start).count();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                    - bulk_load_start).count();
 
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
@@ -295,33 +367,22 @@ public:
             val_sum += res->second;
           }
         } else if (reqs[i].op == kUpdate) {
-          pgm_index.insert_or_assign(batch_data[data_idx].first, batch_data[data_idx].second);
+          pgm_index.insert_or_assign(batch_data[data_idx].first, 
+                                      batch_data[data_idx].second);
         } else if (reqs[i].op == kInsert) {
-          pgm_index.insert_or_assign(batch_data[data_idx].first, batch_data[data_idx].second);
+          pgm_index.insert_or_assign(batch_data[data_idx].first, 
+                                      batch_data[data_idx].second);
         } else if (reqs[i].op == kDelete) {
           pgm_index.erase(batch_data[data_idx].first);
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
-      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end 
+                                                              - start).count();
       exp_res.sum_indexing_time += time;
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({0, time});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = pgm_index.index_size_in_bytes();
     exp_res.index_size = pgm_index.size_in_bytes();
@@ -331,7 +392,8 @@ public:
   }
 
   void TestBTree(int batch_size, ExperimentalResults& exp_res, 
-                  bool show_stat=false, bool check_correctness=true) {
+                  std::string config_path, bool show_stat=false) {
+    BTreeConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     btree::btree_map<KT, VT> btree;
@@ -339,19 +401,18 @@ public:
       btree.insert(load_data[i]);
     }
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_start).count();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                    - bulk_load_start).count();
 
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
@@ -376,54 +437,40 @@ public:
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
-      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+      double time = std::chrono::duration_cast<std::chrono::nanoseconds>(end 
+                                                              - start).count();
       exp_res.sum_indexing_time += time;
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({0, time});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = 0;
     exp_res.index_size = 0;
   }
 
   void TestAFLI(int batch_size, ExperimentalResults& exp_res, 
-                bool show_stat=false, bool check_correctness=true,
-                int bucket_size=-1, int aggregate_size=0) {
+                std::string config_path, bool show_stat=false) {
+    AFLIConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     AFLI<KT, VT> afli;
     afli.BulkLoad(load_data.data(), load_data.size());
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_start).count();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                    - bulk_load_start).count();
     if (show_stat) {
       afli.PrintStat();
     }
 
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
@@ -455,20 +502,6 @@ public:
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({0, time});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = afli.model_size();
     exp_res.index_size = afli.index_size();
@@ -478,39 +511,42 @@ public:
   }
 
   void TestNFL(int batch_size, ExperimentalResults& exp_res, 
-                std::string weights_path, bool show_stat=false, bool check_correctness=true,
-                int bucket_size=-1, int aggregate_size=0) {
+                std::string config_path, bool show_stat=false) {
+    NFLConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
-    NFL<KT, VT> nfl(weights_path, batch_size);
-    uint32_t tail_conflicts = nfl.AutoSwitch(load_data.data(), load_data.size());
+    NFL<KT, VT> nfl(config.weights_path, batch_size);
+    uint32_t tail_conflicts = nfl.AutoSwitch(load_data.data(), 
+                                              load_data.size());
     auto bulk_load_mid = std::chrono::high_resolution_clock::now();
     nfl.IndexBulkLoad(load_data.data(), load_data.size(), tail_conflicts);
     // nfl.BulkLoad(load_data.data(), load_data.size());
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
-    exp_res.bulk_load_trans_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_mid - bulk_load_start).count();
-    exp_res.bulk_load_index_time = std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end - bulk_load_mid).count();
+    exp_res.bulk_load_trans_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_mid 
+                                                    - bulk_load_start).count();
+    exp_res.bulk_load_index_time = 
+      std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
+                                                      - bulk_load_mid).count();
     if (show_stat) {
       nfl.PrintStat();
     }
 
     std::vector<KVT> batch_data;
-    std::vector<Status<KT, VT>> batch_results;
     batch_data.reserve(batch_size);
-    batch_results.reserve(batch_size);
     // Perform operations in batch
-    int num_batches = static_cast<int>(std::ceil(reqs.size() * 1. / batch_size));
+    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
-      batch_results.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
                         static_cast<int>(reqs.size()));
       for (int i = l; i < r; ++ i) {
         batch_data.push_back(reqs[i].kv);
       }
+
       VT val_sum = 0;
       // Perform requests
       auto start = std::chrono::high_resolution_clock::now();
@@ -532,27 +568,15 @@ public:
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
-      double time1 = std::chrono::duration_cast<std::chrono::nanoseconds>(mid - start).count();
-      double time2 = std::chrono::duration_cast<std::chrono::nanoseconds>(end - mid).count();
+      double time1 = std::chrono::duration_cast<std::chrono::nanoseconds>(mid 
+                                                              - start).count();
+      double time2 = std::chrono::duration_cast<std::chrono::nanoseconds>(end 
+                                                              - mid).count();
       exp_res.sum_transform_time += time1;
       exp_res.sum_indexing_time += time2;
       exp_res.num_requests += batch_data.size();
       exp_res.latencies.push_back({time1, time2});
       exp_res.step();
-      if (check_correctness) {
-        for (int i = l; i < r; ++ i) {
-          int data_idx = i - l;
-          if (reqs[i].op == kQuery) {
-            if (batch_results[data_idx].state == kNotFound) {
-              std::cout << "Queried key not found" << std::endl;
-            }
-            ASSERT(batch_results[data_idx].state == kSuccess, "Query fails");
-            ASSERT(batch_results[data_idx].kv.first == batch_data[data_idx].first, "Key not match");
-          } else if (reqs[i].op == kUpdate) {
-            ASSERT(batch_results[data_idx].state == kSuccess, "Update fails");
-          }
-        }
-      }
     }
     exp_res.model_size = nfl.model_size();
     exp_res.index_size = nfl.index_size();

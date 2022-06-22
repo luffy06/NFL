@@ -116,11 +116,22 @@ bool StartWith(std::string src, std::string target) {
   return false;
 }
 
+template<typename T>
+void Shuffle(std::vector<T>& kvs, int l, int r) {
+  std::mt19937_64 gen(kSEED);
+  for (int i = l; i < r; ++ i) {
+    long long rv = gen();
+    int j = std::abs(rv) % (r - i) + i;
+    std::swap(kvs[j], kvs[i]);
+  }
+}
+
 std::string GetWorkloadName(std::string workload_path) {
   int l = 0;
-  int r = workload_path.size() - 1;
-  for (int i = r; i >= 0; -- r, -- i) {
+  int r = workload_path.size();
+  for (int i = r; i >= 0; -- i) {
     if (workload_path[i] == '.') {
+      r = i;
       break;
     }
   }
@@ -132,16 +143,26 @@ std::string GetWorkloadName(std::string workload_path) {
   return workload_path.substr(l, r - l);
 }
 
-template<typename T>
-void Shuffle(std::vector<T>& kvs, int l, int r) {
-  std::mt19937_64 gen(kSEED);
-  for (int i = l; i < r; ++ i) {
-    long long rv = gen();
-    int j = std::abs(rv) % (r - i) + i;
-    std::swap(kvs[j], kvs[i]);
+std::string PathJoin(std::string patha, std::string pathb) {
+  int idxa = patha.size() - 1;
+  while (idxa > 0 && patha[idxa] == '/') {
+    idxa --;
+  }
+  int idxb = 0;
+  while (idxb < pathb.size() && pathb[idxb] == '/') {
+    idxb ++;
+  }
+  if (idxa == -1 && idxb == pathb.size()) {
+    return "/";
+  } else if (idxa == -1) {
+    return "/" + pathb.substr(idxb, pathb.size() - idxb);
+  } else if (idxb == pathb.size()) {
+    return patha.substr(0, idxa + 1);
+  } else {
+    return patha.substr(0, idxa + 1) + "/" 
+            + pathb.substr(idxb, pathb.size() - idxb);
   }
 }
-
 
 template<typename KT, typename VT>
 int HasDebugKey(const std::pair<KT, VT>* kvs, uint32_t size) {

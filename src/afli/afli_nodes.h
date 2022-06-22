@@ -102,8 +102,8 @@ public:
       if (idx < size_ && EQ(entries_[idx].kv_.first, key)) {
         return {&entries_[idx].kv_};
       } else {
-        // std::cout << "Dense Not Found\t" << key << std::endl;
-        // exit(-1);
+        std::cout << "Dense Not Found\t" << key << std::endl;
+        exit(-1);
         return {};
       }
     }

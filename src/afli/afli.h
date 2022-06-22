@@ -17,7 +17,7 @@ private:
   
   uint32_t max_aggregate_;
 
-  const uint32_t kMaxBucketSize = 1;
+  const uint32_t kMaxBucketSize = 6;
   const uint32_t kMinBucketSize = 1;
   const double kSizeAmplification = 2;
   const double kTailPercent = 0.99;
