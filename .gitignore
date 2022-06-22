@@ -5,3 +5,8 @@
 /flow_input/
 /configs/
 /results/
+/lib/ALEX
+/lib/lipp
+/lib/PGM-index
+/lib/BTree
+/lib/YCSB
