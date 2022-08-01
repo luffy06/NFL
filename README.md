@@ -10,11 +10,25 @@ Early access: https://arxiv.org/abs/2205.11807
 * GNU C++ 17
 * OpenMP
 
-# Bootstrap
+# Getting Started
 
+Acitivating intel mkl.
 ```bash
 $ source ~/intel/oneapi/setvars.sh --force intel64
-$ bash bootstrap.sh
 ```
 
-# Evaluation
+Downloading libraries and compiling codes.
+```bash
+$ bash scripts/bootstrap.sh
+```
+
+Generating workloads and configs.
+```bash
+$ bash scripts/generate_workloads.sh
+$ bash scripts/generate_configs.sh
+```
+
+Reproducing results.
+```bash
+$ bash scripts/evaluate.sh
+```

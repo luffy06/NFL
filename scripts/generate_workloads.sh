@@ -65,7 +65,7 @@ req_dist='zipf'
 num_keys=190 # 190 million 
 batch_size=256
 synthetic=false
-gen_source=false
+gen_source=true
 declare -A key_type
 key_type=([longitudes-200M]='float64'
           [longlat-200M]='float64'
