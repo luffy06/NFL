@@ -1,16 +1,18 @@
 #include "benchmark/workload.h"
 #include "util/common.h"
 
-using namespace kvevaluator;
+using namespace nfl;
 
 template<typename KT, typename VT>
-void WriteWorkloadKeys(std::string workload_path, std::string flow_input_dir, double prop = 1) {
-  std::string workload_name = GetWorkloadName(workload_path);
+void write_workload_keys(std::string workload_path, 
+                          std::string flow_input_dir, 
+                          double prop = 1) {
+  std::string workload_name = get_workload_name(workload_path);
   std::cout << "Write raw keys [" << int(prop * 100) << "%] from [" 
             << workload_name << "]" << std::endl;
-  std::vector<std::pair<KT, VT>> load_data;
+  std::vector<std::pair<KT, VT>> init_data;
   std::vector<Request<KT, VT>> run_reqs;
-  LoadRequests(workload_path, load_data, run_reqs);
+  load_data(workload_path, init_data, run_reqs);
   std::string output_path = flow_input_dir + workload_name + 
                             (std::fabs(prop - 1) < 1e-3 ? "" : "-small") + 
                             "-training.txt";
@@ -19,11 +21,11 @@ void WriteWorkloadKeys(std::string workload_path, std::string flow_input_dir, do
     std::cout << "File [" << output_path << "] does not exist" << std::endl;
     exit(-1);
   }
-  AssessData(load_data.data(), load_data.size());
-  int n = int(load_data.size() * prop);
+  assess_data(init_data.data(), init_data.size());
+  int n = int(init_data.size() * prop);
   for (int i = 0; i < n; ++ i) {
     out << std::fixed << std::setprecision(std::numeric_limits<KT>::digits10) 
-        << load_data[i].first << std::endl;
+        << init_data[i].first << std::endl;
   }
   out.close();
 }
@@ -38,9 +40,9 @@ int main(int argc, char* argv[]) {
   std::string workload_path = std::string(argv[1]);
   std::string key_type = std::string(argv[2]);
   std::string flow_input_dir = std::string(argv[3]);
-  double prop = STRTONUM<char*, int>(argv[4]) / 100.;
+  double prop = ston<char*, int>(argv[4]) / 100.;
   if (key_type == "float64") {
-    WriteWorkloadKeys<double, long long>(workload_path, flow_input_dir, prop);
+    write_workload_keys<double, long long>(workload_path, flow_input_dir, prop);
   } else {
     std::cout << "Unsupported key type [" << key_type << "]" << std::endl;
     exit(-1);

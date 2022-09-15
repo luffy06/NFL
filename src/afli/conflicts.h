@@ -4,7 +4,7 @@
 #include "util/common.h"
 #include "models/linear_model.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 struct ConflictsInfo {
   uint32_t* conflicts_;
@@ -13,7 +13,8 @@ struct ConflictsInfo {
   uint32_t max_size_;
   uint32_t size_;
 
-  ConflictsInfo(uint32_t size, uint32_t max_size) : max_size_(max_size), num_conflicts_(0) {
+  ConflictsInfo(uint32_t size, uint32_t max_size) 
+    : max_size_(max_size), num_conflicts_(0) {
     size_ = size;
     conflicts_ = new uint32_t[size];
     positions_ = new uint32_t[size];
@@ -24,7 +25,7 @@ struct ConflictsInfo {
     delete[] positions_;
   }
 
-  void AddConflict(uint32_t position, uint32_t conflict) {
+  void add_conflict(uint32_t position, uint32_t conflict) {
     conflicts_[num_conflicts_] = conflict;
     positions_[num_conflicts_] = position;
     num_conflicts_ ++;
@@ -32,9 +33,9 @@ struct ConflictsInfo {
 };
 
 template<typename KT, typename VT>
-ConflictsInfo* BuildLinearModel(const std::pair<KT, VT>* kvs, uint32_t size,
-                                LinearModel<KT>*& model, 
-                                double size_amp) {
+ConflictsInfo* build_linear_model(const std::pair<KT, VT>* kvs, uint32_t size,
+                                  LinearModel<KT>*& model, 
+                                  double size_amp) {
   if (model != nullptr) {
     model->slope_ = model->intercept_ = 0;
   } else {
@@ -45,7 +46,7 @@ ConflictsInfo* BuildLinearModel(const std::pair<KT, VT>* kvs, uint32_t size,
   KT min_key = kvs[0].first;
   KT max_key = kvs[size - 1].first;
   KT key_space = max_key - min_key;
-  if (EQ(min_key, max_key)) {
+  if (compare(min_key, max_key)) {
     delete model;
     model = nullptr;
     return nullptr;
@@ -57,24 +58,27 @@ ConflictsInfo* BuildLinearModel(const std::pair<KT, VT>* kvs, uint32_t size,
     KT key = kvs[i].first;
     // double y = max_size * (key - min_key) / key_space;
     double y = i;
-    builder.Add(key, y);
+    builder.add(key, y);
   }
-  builder.Build(model);
-  if (EQ(model->slope_, 0.)) {
+  builder.build(model);
+  if (compare(model->slope_, 0.)) {
     // Fail to build a linear model
     delete model;
     model = nullptr;
     return nullptr;
   } else {
     model->intercept_ = -model->slope_ * (min_key) + 0.5;
-    long long predicted_size = model->Predict(max_key) + 1;
+    int64_t predicted_size = model->predict(max_key) + 1;
     if (predicted_size > 1) {
-      max_size = std::min(predicted_size, static_cast<long long>(max_size));
+      max_size = std::min(predicted_size, static_cast<int64_t>(max_size));
     }
-    uint32_t first_pos = std::min(std::max(model->Predict(min_key), 0LL), static_cast<long long>(max_size - 1));
-    uint32_t last_pos = std::min(std::max(model->Predict(max_key), 0LL), static_cast<long long>(max_size - 1));
+    uint32_t first_pos = std::min(std::max(model->predict(min_key), 0L), 
+                                  static_cast<int64_t>(max_size - 1));
+    uint32_t last_pos = std::min(std::max(model->predict(max_key), 0L), 
+                                  static_cast<int64_t>(max_size - 1));
     if (last_pos == first_pos) {
-      // Model fails to predict since all predicted positions are rounded to the same one
+      // Model fails to predict since all predicted positions are rounded to the 
+      // same one
       model->slope_ = size / (max_key - min_key);
       model->intercept_ = -model->slope_ * (min_key) + 0.5;
     }
@@ -82,27 +86,29 @@ ConflictsInfo* BuildLinearModel(const std::pair<KT, VT>* kvs, uint32_t size,
     uint32_t p_last = first_pos;
     uint32_t conflict = 1;
     for (uint32_t i = 1; i < size; ++ i) {
-      uint32_t p = std::min(std::max(model->Predict(kvs[i].first), 0LL), static_cast<long long>(max_size - 1));
+      uint32_t p = std::min(std::max(model->predict(kvs[i].first), 0L), 
+                                    static_cast<int64_t>(max_size - 1));
       if (p == p_last) {
         conflict ++;
       } else {
-        ci->AddConflict(p_last, conflict);
+        ci->add_conflict(p_last, conflict);
         p_last = p;
         conflict = 1;
       }
     }
     if (conflict > 0) {
-      ci->AddConflict(p_last, conflict);
+      ci->add_conflict(p_last, conflict);
     }
     return ci;
   }
 }
 
 template<typename KT, typename VT>
-uint32_t ComputeTailConflicts(const std::pair<KT, VT>* kvs, uint32_t size, double size_amp, float kTailPercent=0.99) {
+uint32_t compute_tail_conflicts(const std::pair<KT, VT>* kvs, uint32_t size, 
+                                double size_amp, float kTailPercent=0.99) {
   // The input keys should be ordered
   LinearModel<KT>* model = new LinearModel<KT>();
-  ConflictsInfo* ci = BuildLinearModel<KT, VT>(kvs, size, model, size_amp);
+  ConflictsInfo* ci = build_linear_model<KT, VT>(kvs, size, model, size_amp);
   delete model;
 
   if (ci->num_conflicts_ == 0) {

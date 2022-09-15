@@ -4,7 +4,7 @@
 #include "afli/iterator.h"
 #include "util/common.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 template<typename KT, typename VT>
 class Bucket {
@@ -16,8 +16,9 @@ public:
 public:
   Bucket() : data_(nullptr), size_(0) { }
 
-  Bucket(const KVT* kvs, uint32_t size, const uint8_t kMaxBucketSize) : size_(size) {
-    data_ = new KVT[kMaxBucketSize];
+  Bucket(const KVT* kvs, uint32_t size, const uint8_t capacity) 
+        : size_(size) {
+    data_ = new KVT[capacity];
     for (uint32_t i = 0; i < size; ++ i) {
       data_[i] = kvs[i];
     }
@@ -32,28 +33,29 @@ public:
 
   inline uint8_t size() const { return size_; }
 
-  ResultIterator<KT, VT> Find(KT key) {
+  ResultIterator<KT, VT> find(KT key) {
     for (uint32_t i = 0; i < size_; ++ i) {
-      if (EQ(data_[i].first, key)) {
+      if (compare(data_[i].first, key)) {
         return {&data_[i]};
       }
     }
     return {};
   }
 
-  bool Update(KVT kv) {
+  bool update(KVT kv) {
     for (uint8_t i = 0; i < size_; ++ i) {
-      if (EQ(data_[i].first, kv.first)) {
+      if (compare(data_[i].first, kv.first)) {
+        data_[i] = kv;
         return true;
       }
     }
     return false;
   }
 
-  uint32_t Delete(KT key) {
+  uint32_t remove(KT key) {
     bool copy = false;
     for (uint8_t i = 0; i < size_; ++ i) {
-      if (EQ(data_[i].first, key)) {
+      if (compare(data_[i].first, key)) {
         copy = true;
       }
       if (copy && i + 1 < size_) {
@@ -68,8 +70,8 @@ public:
     }
   }
 
-  bool Insert(KVT kv, const uint8_t kMaxBucketSize) {
-    if (size_ < kMaxBucketSize) {
+  bool insert(KVT kv, const uint8_t capacity) {
+    if (size_ < capacity) {
       data_[size_] = kv;
       size_ ++;
       return true;

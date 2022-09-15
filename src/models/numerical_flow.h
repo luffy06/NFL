@@ -4,7 +4,7 @@
 #include "models/bnaf.h"
 #include "util/common.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 template<typename KT, typename VT>
 class NumericalFlow {
@@ -19,7 +19,7 @@ public:
 public:
   explicit NumericalFlow(std::string weight_path, uint32_t batch_size) 
     : batch_size_(batch_size) {
-    Load(weight_path);
+    load(weight_path);
     model_.set_batch_size(batch_size);
   }
 
@@ -32,7 +32,7 @@ public:
     model_.set_batch_size(batch_size_);
   }
 
-  void Transform(const KVT* kvs, uint32_t size, KKVT* tran_kvs) {
+  void transform(const KVT* kvs, uint32_t size, KKVT* tran_kvs) {
     for (uint32_t i = 0; i < size; ++ i) {
       tran_kvs[i] = {(kvs[i].first - mean_) / var_, kvs[i]};
     }
@@ -40,18 +40,18 @@ public:
     for (uint32_t i = 0; i < num_batches; ++ i) {
       uint32_t l = i * batch_size_;
       uint32_t r = std::min((i + 1) * batch_size_, size);
-      model_.Transform(tran_kvs + l, r - l);
+      model_.transform(tran_kvs + l, r - l);
     }
   }
 
-  KKVT Transform(const KVT kv) {
+  KKVT transform(const KVT kv) {
     KKVT t_kv = {(kv.first - mean_) / var_, kv};
-    model_.Transform(&t_kv, 1);
+    model_.transform(&t_kv, 1);
     return t_kv;
   }
 
 private:
-  void Load(std::string path) {
+  void load(std::string path) {
     std::fstream in(path, std::ios::in);
     if (!in.is_open()) {
       std::cout << "File:" << path << " doesn't exist" << std::endl;

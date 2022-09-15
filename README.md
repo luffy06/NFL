@@ -30,5 +30,22 @@ $ bash scripts/generate_configs.sh
 
 Reproducing results.
 ```bash
-$ bash scripts/evaluate.sh
+$ bash scripts/benchmark.sh
 ```
+
+Clearing.
+```bash
+$ bash scripts/clear.sh
+```
+
+# Results
+
+The results are shown in the following format.
+```txt
+(dataset name) (index name) (batch size) (bulk loading time) (transformation time in bulk loading) (model size) (index size) (overall throughput) (avg-T) (avg-I) (50-T) (50-I) (75-T) (75-I) (99-T) (99-I) (995-T) (995-I) (9999-T) (9999-I) (max-T) (max-I)
+```
+where 'T' represents the transformation time, 'I' represents the indexing latency.
+
+# Contact
+
+Please be free to contact us via shangyuwu2-c@my.cityu.edu.hk.

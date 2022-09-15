@@ -3,7 +3,7 @@
 
 #include "util/common.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 template<typename KT>
 class longitudes_distribution {

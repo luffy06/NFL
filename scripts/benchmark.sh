@@ -4,7 +4,7 @@ set -e # fail and exit on any command erroring
 
 root_dir=$(cd `dirname $0`/..; pwd)
 build_dir=${root_dir}/build
-exec=${build_dir}/evaluate
+exec=${build_dir}/benchmark
 result_dir=${root_dir}/results
 workload_dir=${root_dir}/workloads
 config_dir=${root_dir}/configs

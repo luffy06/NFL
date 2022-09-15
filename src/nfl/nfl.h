@@ -7,7 +7,7 @@
 #include "models/numerical_flow.h"
 #include "util/common.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 template<typename KT, typename VT>
 class NFL {
@@ -68,15 +68,15 @@ public:
     batch_size_ = batch_size;
   }
 
-  uint32_t AutoSwitch(const KVT* kvs, uint32_t size, uint32_t aggregate_size=0) {
+  uint32_t auto_switch(const KVT* kvs, uint32_t size, uint32_t aggregate_size=0) {
     tran_kvs_ = new KKVT[size];
-    uint32_t origin_tail_conflicts = ComputeTailConflicts<KT, VT>(kvs, size, kSizeAmplification, kTailPercent);
+    uint32_t origin_tail_conflicts = compute_tail_conflicts<KT, VT>(kvs, size, kSizeAmplification, kTailPercent);
     flow_->set_batch_size(kMaxBatchSize);
-    flow_->Transform(kvs, size, tran_kvs_);
+    flow_->transform(kvs, size, tran_kvs_);
     std::sort(tran_kvs_, tran_kvs_ + size, [](const KKVT& a, const KKVT& b) {
       return a.first < b.first;
     });
-    uint32_t tran_tail_conflicts = ComputeTailConflicts<KT, KVT>(tran_kvs_, size, kSizeAmplification, kTailPercent);
+    uint32_t tran_tail_conflicts = compute_tail_conflicts<KT, KVT>(tran_kvs_, size, kSizeAmplification, kTailPercent);
     if (origin_tail_conflicts <= tran_tail_conflicts
       || origin_tail_conflicts - tran_tail_conflicts 
         < static_cast<uint32_t>(origin_tail_conflicts * kConflictsDecay)) {
@@ -90,91 +90,62 @@ public:
     }
   }
 
-  void IndexBulkLoad(const KVT* kvs, uint32_t size, uint32_t tail_conflicts, uint32_t aggregate_size=0) {
+  void bulk_load(const KVT* kvs, uint32_t size, uint32_t tail_conflicts, uint32_t aggregate_size=0) {
     if (enable_flow_) {
       tran_index_ = new AFLI<KT, KVT>();
-      tran_index_->BulkLoad(tran_kvs_, size, tail_conflicts, aggregate_size);
+      tran_index_->bulk_load(tran_kvs_, size, tail_conflicts, aggregate_size);
       flow_->set_batch_size(batch_size_);
       delete tran_kvs_;
       tran_kvs_ = new KKVT[batch_size_];
     } else {
       index_ = new AFLI<KT, VT>();
-      index_->BulkLoad(kvs, size, tail_conflicts, aggregate_size);
+      index_->bulk_load(kvs, size, tail_conflicts, aggregate_size);
       batch_kvs_ = new KVT[batch_size_];      
     }
   }
 
-  // The index must be empty when calling this function.
-  void BulkLoad(const KVT* kvs, uint32_t size, uint32_t aggregate_size=0) {
-    tran_kvs_ = new KKVT[size];
-    uint32_t origin_tail_conflicts = ComputeTailConflicts<KT, VT>(kvs, size, kSizeAmplification, kTailPercent);
-    flow_->set_batch_size(kMaxBatchSize);
-    flow_->Transform(kvs, size, tran_kvs_);
-    std::sort(tran_kvs_, tran_kvs_ + size, [](const KKVT& a, const KKVT& b) {
-      return a.first < b.first;
-    });
-    uint32_t tran_tail_conflicts = ComputeTailConflicts<KT, KVT>(tran_kvs_, size, kSizeAmplification, kTailPercent);
-    if (origin_tail_conflicts <= tran_tail_conflicts
-      || origin_tail_conflicts - tran_tail_conflicts 
-        < static_cast<uint32_t>(origin_tail_conflicts * kConflictsDecay)) {
-      enable_flow_ = false;
-      delete[] tran_kvs_;
-      tran_kvs_ = nullptr;
-      index_ = new AFLI<KT, VT>();
-      index_->BulkLoad(kvs, size, origin_tail_conflicts, aggregate_size);
-      batch_kvs_ = new KVT[batch_size_];
-    } else {
-      enable_flow_ = true;
-      tran_index_ = new AFLI<KT, KVT>();
-      tran_index_->BulkLoad(tran_kvs_, size, tran_tail_conflicts, aggregate_size);
-      flow_->set_batch_size(batch_size_);
-      delete tran_kvs_;
-      tran_kvs_ = new KKVT[batch_size_];
-    }
-  }
-
-  void Transform(const KVT* kvs, uint32_t size) {
+  void transform(const KVT* kvs, uint32_t size) {
     if (enable_flow_) {
-      flow_->Transform(kvs, size, tran_kvs_);
+      flow_->transform(kvs, size, tran_kvs_);
     } else {
       std::memcpy(batch_kvs_, kvs, sizeof(KVT) * size);
     }
   }
 
-  ResultIterator<KT, VT> Find(uint32_t idx_in_batch) {
+  ResultIterator<KT, VT> find(uint32_t idx_in_batch) {
     if (enable_flow_) {
-      auto it = tran_index_->Find(tran_kvs_[idx_in_batch].first);
+      auto it = tran_index_->find(tran_kvs_[idx_in_batch].first);
       if (!it.is_end()) {
         return {it.value_addr()};
       } else {
         return {};
       }
     } else {
-      return index_->Find(batch_kvs_[idx_in_batch].first);
+      return index_->find(batch_kvs_[idx_in_batch].first);
     }
   }
 
-  bool Update(uint32_t idx_in_batch) {
+  bool update(uint32_t idx_in_batch) {
     if (enable_flow_) {
-      return tran_index_->Update(tran_kvs_[idx_in_batch]);
+      return tran_index_->update(tran_kvs_[idx_in_batch]);
     } else {
-      return index_->Update(batch_kvs_[idx_in_batch]);
+      return index_->update(batch_kvs_[idx_in_batch]);
     }
   }
 
-  uint32_t Delete(uint32_t idx_in_batch) {
+  uint32_t remove(uint32_t idx_in_batch) {
     if (enable_flow_) {
-      return tran_index_->Delete(tran_kvs_[idx_in_batch].first);
+      return tran_index_->remove(tran_kvs_[idx_in_batch].first);
     } else {
-      return index_->Delete(batch_kvs_[idx_in_batch].first);
+      return index_->remove(batch_kvs_[idx_in_batch].first);
     }
   }
 
-  void Insert(uint32_t idx_in_batch) {
+  void insert(uint32_t idx_in_batch) {
     if (enable_flow_) {
-      tran_index_->Insert(tran_kvs_[idx_in_batch]);
+      tran_index_->insert(tran_kvs_[idx_in_batch]);
     } else {
-      index_->Insert(batch_kvs_[idx_in_batch]);
+      index_->insert(batch_kvs_[idx_in_batch]);
     }
   }
 
@@ -195,11 +166,11 @@ public:
     }
   }
 
-  void PrintStat() {
+  void print_stats() {
     if (enable_flow_) {
-      tran_index_->PrintStat();
+      tran_index_->print_stats();
     } else {
-      index_->PrintStat();
+      index_->print_stats();
     }
   }
 };

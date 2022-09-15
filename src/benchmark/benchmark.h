@@ -1,5 +1,5 @@
-#ifndef KV_EVALUATOR_H
-#define KV_EVALUATOR_H
+#ifndef BENCHMARK_H
+#define BENCHMARK_H
 
 #include "benchmark/workload.h"
 #include "util/common.h"
@@ -11,7 +11,7 @@
 #include "nfl/nfl.h"
 #include "PGM-index/include/pgm/pgm_index_dynamic.hpp"
 
-namespace kvevaluator {
+namespace nfl {
 
 struct LIPPConfig {
   LIPPConfig(std::string path) { }
@@ -41,11 +41,11 @@ struct PGMConfig {
             std::string key = kv.substr(0, n);
             std::string val = kv.substr(n + 1);
             if (key == "base") {
-              base = STRTONUM<std::string, int>(val);
+              base = std::stoi(val);
             } else if (key == "buffer_level") {
-              buffer_level = STRTONUM<std::string, int>(val);
+              buffer_level = std::stoi(val);
             } else if (key == "index_level") {
-              index_level = STRTONUM<std::string, int>(val);
+              index_level = std::stoi(val);
             }
           }
         }
@@ -77,9 +77,9 @@ struct AFLIConfig {
             std::string key = kv.substr(0, n);
             std::string val = kv.substr(n + 1);
             if (key == "bucket_size") {
-              bucket_size = STRTONUM<std::string, int>(val);
+              bucket_size = std::stoi(val);
             } else if (key == "aggregate_size") {
-              aggregate_size = STRTONUM<std::string, int>(val);
+              aggregate_size = std::stoi(val);
             }
           }
         }
@@ -109,9 +109,9 @@ struct NFLConfig {
             std::string key = kv.substr(0, n);
             std::string val = kv.substr(n + 1);
             if (key == "bucket_size") {
-              bucket_size = STRTONUM<std::string, int>(val);
+              bucket_size = std::stoi(val);
             } else if (key == "aggregate_size") {
-              aggregate_size = STRTONUM<std::string, int>(val);
+              aggregate_size = std::stoi(val);
             } else if (key == "weights_path") {
               weights_path = val;
             }
@@ -124,73 +124,73 @@ struct NFLConfig {
 };
 
 template<typename KT, typename VT>
-class KVEvaluator {
+class Benchmark {
 typedef std::pair<KT, VT> KVT;
 
 public:
   
-  std::vector<KVT> load_data;
-  std::vector<Request<KT, VT>> reqs;
+  std::vector<KVT> init_data;
+  std::vector<Request<KT, VT>> requests;
   const double conflicts_decay = 0.1;
 
-  void TestWorkloads(std::string index_name, int batch_size, 
+  void run_workload(std::string index_name, int batch_size, 
                     std::string workload_path, std::string config_path="",
                     bool show_incremental_throughputs=false) {
-    load_data.clear();
-    reqs.clear();
-    std::string workload_name = GetWorkloadName(workload_path);
-    LoadRequests(workload_path, load_data, reqs);
+    init_data.clear();
+    requests.clear();
+    std::string workload_name = get_workload_name(workload_path);
+    load_data(workload_path, init_data, requests);
     // Check the order of load data.
-    for (int i = 1; i < load_data.size(); ++ i) {
-      if (load_data[i].first < load_data[i - 1].first || 
-          EQ(load_data[i].first, load_data[i - 1].first)) {
+    for (int i = 1; i < init_data.size(); ++ i) {
+      if (init_data[i].first < init_data[i - 1].first || 
+          compare(init_data[i].first, init_data[i - 1].first)) {
         std::cout << std::fixed 
                   << std::setprecision(std::numeric_limits<KT>::digits10) 
                   << "Duplicated data" << std::endl << i - 1 << "th key [" 
-                  << load_data[i - 1].first << "]" << std::endl << i 
-                  << "th key [" << load_data[i].first << "]" << std::endl;
+                  << init_data[i - 1].first << "]" << std::endl << i 
+                  << "th key [" << init_data[i].first << "]" << std::endl;
       }
-      ASSERT(load_data[i].first > load_data[i - 1].first, 
+      assert_p(init_data[i].first > init_data[i - 1].first, 
               "Unordered case in load data");
     }
     bool categorical_keys = false;
     if (categorical_keys) {
       std::set<KT> key_set;
-      for (int i = 0; i < load_data.size(); ++ i) {
-        key_set.insert(load_data[i].first);
+      for (int i = 0; i < init_data.size(); ++ i) {
+        key_set.insert(init_data[i].first);
       }
-      for (int i = 0; i < reqs.size(); ++ i) {
-        key_set.insert(reqs[i].kv.first);
+      for (int i = 0; i < requests.size(); ++ i) {
+        key_set.insert(requests[i].kv.first);
       }
       std::vector<KT> key_array;
       key_array.reserve(key_set.size());
       key_array.insert(key_array.end(), key_set.begin(), key_set.end());
-      for (int i = 0; i < load_data.size(); ++ i) {
+      for (int i = 0; i < init_data.size(); ++ i) {
         KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), 
-                                      load_data[i].first) - key_array.begin();
-        load_data[i] = {opt_key, load_data[i].second};
+                                      init_data[i].first) - key_array.begin();
+        init_data[i] = {opt_key, init_data[i].second};
       }
-      for (int i = 0; i < reqs.size(); ++ i) {
+      for (int i = 0; i < requests.size(); ++ i) {
         KT opt_key = std::lower_bound(key_array.begin(), key_array.end(), 
-                                      reqs[i].kv.first) - key_array.begin();
-        reqs[i].kv = {opt_key, reqs[i].kv.second};
+                                      requests[i].kv.first) - key_array.begin();
+        requests[i].kv = {opt_key, requests[i].kv.second};
       }
     }
     // Start to evaluate
     bool show_stat = false;
     ExperimentalResults exp_res(batch_size);
-    if (StartWith(index_name, "lipp")) {
-      TestLIPP(batch_size, exp_res, config_path, show_stat);
-    } else if (StartWith(index_name, "alex")) {
-      TestAlex(batch_size, exp_res, config_path, show_stat);
-    } else if (StartWith(index_name, "pgm-index")) {
-      TestPGM(batch_size, exp_res, config_path, show_stat);
-    } else if (StartWith(index_name, "btree")) {
-      TestBTree(batch_size, exp_res, config_path, show_stat);
-    } else if (StartWith(index_name, "afli")) {
-      TestAFLI(batch_size, exp_res, config_path, show_stat);
-    } else if (StartWith(index_name, "nfl")) {
-      TestNFL(batch_size, exp_res, config_path, show_stat);
+    if (start_with(index_name, "lipp")) {
+      run_lipp(batch_size, exp_res, config_path, show_stat);
+    } else if (start_with(index_name, "alex")) {
+      run_alex(batch_size, exp_res, config_path, show_stat);
+    } else if (start_with(index_name, "pgm-index")) {
+      run_pgm(batch_size, exp_res, config_path, show_stat);
+    } else if (start_with(index_name, "btree")) {
+      run_btree(batch_size, exp_res, config_path, show_stat);
+    } else if (start_with(index_name, "afli")) {
+      run_afli(batch_size, exp_res, config_path, show_stat);
+    } else if (start_with(index_name, "nfl")) {
+      run_nfl(batch_size, exp_res, config_path, show_stat);
     } else {
       std::cout << "Unsupported model name [" << index_name << "]" << std::endl;
       exit(-1);
@@ -205,14 +205,14 @@ public:
     }
   }
 
-  void TestLIPP(int batch_size, ExperimentalResults& exp_res, 
+  void run_lipp(int batch_size, ExperimentalResults& exp_res, 
                 std::string config_path, bool show_stat=false) {
     // Load config
     LIPPConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     LIPP<KT, VT> lipp;
-    lipp.bulk_load(load_data.data(), load_data.size());      
+    lipp.bulk_load(init_data.data(), init_data.size());      
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_index_time = 
       std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
@@ -220,17 +220,17 @@ public:
 
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
@@ -238,14 +238,14 @@ public:
       auto start = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
+        if (requests[i].op == kQuery) {
           VT res = lipp.at(batch_data[data_idx].first);
           val_sum += res;
-        } else if (reqs[i].op == kUpdate) {
+        } else if (requests[i].op == kUpdate) {
           VT res = lipp.at(batch_data[data_idx].first);
-        } else if (reqs[i].op == kInsert) {
+        } else if (requests[i].op == kInsert) {
           lipp.insert(batch_data[data_idx]);
-        } else if (reqs[i].op == kDelete) {
+        } else if (requests[i].op == kDelete) {
           std::cout << "Unsupport now" << std::endl;
           exit(-1);
         }
@@ -265,13 +265,13 @@ public:
     }
   }
 
-  void TestAlex(int batch_size, ExperimentalResults& exp_res, 
+  void run_alex(int batch_size, ExperimentalResults& exp_res, 
                 std::string config_path, bool show_stat=false) {
     AlexConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     alex::Alex<KT, VT> alex;
-    alex.bulk_load(load_data.data(), load_data.size());
+    alex.bulk_load(init_data.data(), init_data.size());
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_index_time = 
       std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
@@ -279,17 +279,17 @@ public:
     
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
@@ -297,19 +297,19 @@ public:
       auto start = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
+        if (requests[i].op == kQuery) {
           auto res = alex.find(batch_data[data_idx].first);
           if (res != alex.end()) {
             val_sum += res.payload();
           }
-        } else if (reqs[i].op == kUpdate) {
+        } else if (requests[i].op == kUpdate) {
           auto res = alex.find(batch_data[data_idx].first);
           if (res != alex.end()) {
             res.payload() = batch_data[data_idx].second;
           }
-        } else if (reqs[i].op == kInsert) {
+        } else if (requests[i].op == kInsert) {
           alex.insert(batch_data[data_idx].first, batch_data[data_idx].second);
-        } else if (reqs[i].op == kDelete) {
+        } else if (requests[i].op == kDelete) {
           int res = alex.erase(batch_data[data_idx].first);
         }
       }
@@ -328,13 +328,13 @@ public:
     }
   }
 
-  void TestPGM(int batch_size, ExperimentalResults& exp_res, 
+  void run_pgm(int batch_size, ExperimentalResults& exp_res, 
                 std::string config_path, bool show_stat=false) {
     PGMConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     pgm::DynamicPGMIndex<KT, VT, pgm::PGMIndex<KT, 16>> pgm_index(
-      load_data.begin(), load_data.end(), config.base, config.buffer_level, 
+      init_data.begin(), init_data.end(), config.base, config.buffer_level, 
       config.index_level);
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_index_time = 
@@ -343,17 +343,17 @@ public:
 
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
@@ -361,18 +361,18 @@ public:
       auto start = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
+        if (requests[i].op == kQuery) {
           auto res = pgm_index.find(batch_data[data_idx].first);
           if (res != pgm_index.end()) {
             val_sum += res->second;
           }
-        } else if (reqs[i].op == kUpdate) {
+        } else if (requests[i].op == kUpdate) {
           pgm_index.insert_or_assign(batch_data[data_idx].first, 
                                       batch_data[data_idx].second);
-        } else if (reqs[i].op == kInsert) {
+        } else if (requests[i].op == kInsert) {
           pgm_index.insert_or_assign(batch_data[data_idx].first, 
                                       batch_data[data_idx].second);
-        } else if (reqs[i].op == kDelete) {
+        } else if (requests[i].op == kDelete) {
           pgm_index.erase(batch_data[data_idx].first);
         }
       }
@@ -391,14 +391,14 @@ public:
     }
   }
 
-  void TestBTree(int batch_size, ExperimentalResults& exp_res, 
+  void run_btree(int batch_size, ExperimentalResults& exp_res, 
                   std::string config_path, bool show_stat=false) {
     BTreeConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     btree::btree_map<KT, VT> btree;
-    for (int i = 0; i < load_data.size(); ++ i) {
-      btree.insert(load_data[i]);
+    for (int i = 0; i < init_data.size(); ++ i) {
+      btree.insert(init_data[i]);
     }
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_index_time = 
@@ -407,17 +407,17 @@ public:
 
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
@@ -425,14 +425,14 @@ public:
       auto start = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
+        if (requests[i].op == kQuery) {
           auto res = btree.find(batch_data[data_idx].first);
           val_sum += res->second;
-        } else if (reqs[i].op == kUpdate) {
+        } else if (requests[i].op == kUpdate) {
           auto res = btree.find(batch_data[data_idx].first);
-        } else if (reqs[i].op == kInsert) {
+        } else if (requests[i].op == kInsert) {
           btree.insert(batch_data[data_idx]);
-        } else if (reqs[i].op == kDelete) {
+        } else if (requests[i].op == kDelete) {
           int res = btree.erase(batch_data[data_idx].first);
         }
       }
@@ -448,34 +448,34 @@ public:
     exp_res.index_size = 0;
   }
 
-  void TestAFLI(int batch_size, ExperimentalResults& exp_res, 
+  void run_afli(int batch_size, ExperimentalResults& exp_res, 
                 std::string config_path, bool show_stat=false) {
     AFLIConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     AFLI<KT, VT> afli;
-    afli.BulkLoad(load_data.data(), load_data.size());
+    afli.bulk_load(init_data.data(), init_data.size());
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_index_time = 
       std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
                                                     - bulk_load_start).count();
     if (show_stat) {
-      afli.PrintStat();
+      afli.print_stats();
     }
 
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
@@ -483,17 +483,17 @@ public:
       auto start = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
-          auto it = afli.Find(batch_data[data_idx].first);
+        if (requests[i].op == kQuery) {
+          auto it = afli.find(batch_data[data_idx].first);
           if (!it.is_end()) {
             val_sum += it.value();
           }
-        } else if (reqs[i].op == kUpdate) {
-          bool res = afli.Update(batch_data[data_idx]);
-        } else if (reqs[i].op == kInsert) {
-          afli.Insert(batch_data[data_idx]);
-        } else if (reqs[i].op == kDelete) {
-          int res = afli.Delete(batch_data[data_idx].first);
+        } else if (requests[i].op == kUpdate) {
+          bool res = afli.update(batch_data[data_idx]);
+        } else if (requests[i].op == kInsert) {
+          afli.insert(batch_data[data_idx]);
+        } else if (requests[i].op == kDelete) {
+          int res = afli.remove(batch_data[data_idx].first);
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
@@ -506,21 +506,20 @@ public:
     exp_res.model_size = afli.model_size();
     exp_res.index_size = afli.index_size();
     if (show_stat) {
-      afli.PrintStat();
+      afli.print_stats();
     }
   }
 
-  void TestNFL(int batch_size, ExperimentalResults& exp_res, 
+  void run_nfl(int batch_size, ExperimentalResults& exp_res, 
                 std::string config_path, bool show_stat=false) {
     NFLConfig config(config_path);
     // Start to bulk load
     auto bulk_load_start = std::chrono::high_resolution_clock::now();
     NFL<KT, VT> nfl(config.weights_path, batch_size);
-    uint32_t tail_conflicts = nfl.AutoSwitch(load_data.data(), 
-                                              load_data.size());
+    uint32_t tail_conflicts = nfl.auto_switch(init_data.data(), 
+                                              init_data.size());
     auto bulk_load_mid = std::chrono::high_resolution_clock::now();
-    nfl.IndexBulkLoad(load_data.data(), load_data.size(), tail_conflicts);
-    // nfl.BulkLoad(load_data.data(), load_data.size());
+    nfl.bulk_load(init_data.data(), init_data.size(), tail_conflicts);
     auto bulk_load_end = std::chrono::high_resolution_clock::now();
     exp_res.bulk_load_trans_time = 
       std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_mid 
@@ -529,42 +528,42 @@ public:
       std::chrono::duration_cast<std::chrono::nanoseconds>(bulk_load_end 
                                                       - bulk_load_mid).count();
     if (show_stat) {
-      nfl.PrintStat();
+      nfl.print_stats();
     }
 
     std::vector<KVT> batch_data;
     batch_data.reserve(batch_size);
-    // Perform operations in batch
-    int num_batches = std::ceil(reqs.size() * 1. / batch_size);
+    // Perform requests in batch
+    int num_batches = std::ceil(requests.size() * 1. / batch_size);
     exp_res.latencies.reserve(num_batches * 3);
     exp_res.need_compute.reserve(num_batches * 3);
     for (int batch_idx = 0; batch_idx < num_batches; ++ batch_idx) {
       batch_data.clear();
       int l = batch_idx * batch_size;
       int r = std::min((batch_idx + 1) * batch_size, 
-                        static_cast<int>(reqs.size()));
+                        static_cast<int>(requests.size()));
       for (int i = l; i < r; ++ i) {
-        batch_data.push_back(reqs[i].kv);
+        batch_data.push_back(requests[i].kv);
       }
 
       VT val_sum = 0;
       // Perform requests
       auto start = std::chrono::high_resolution_clock::now();
-      nfl.Transform(batch_data.data(), batch_data.size());
+      nfl.transform(batch_data.data(), batch_data.size());
       auto mid = std::chrono::high_resolution_clock::now();
       for (int i = l; i < r; ++ i) {
         int data_idx = i - l;
-        if (reqs[i].op == kQuery) {
-          auto it = nfl.Find(data_idx);
+        if (requests[i].op == kQuery) {
+          auto it = nfl.find(data_idx);
           if (!it.is_end()) {
               val_sum += it.value();
           }
-        } else if (reqs[i].op == kUpdate) {
-          bool res = nfl.Update(data_idx);
-        } else if (reqs[i].op == kInsert) {
-          nfl.Insert(data_idx);
-        } else if (reqs[i].op == kDelete) {
-          int res = nfl.Delete(data_idx);
+        } else if (requests[i].op == kUpdate) {
+          bool res = nfl.update(data_idx);
+        } else if (requests[i].op == kInsert) {
+          nfl.insert(data_idx);
+        } else if (requests[i].op == kDelete) {
+          int res = nfl.remove(data_idx);
         }
       }
       auto end = std::chrono::high_resolution_clock::now();
@@ -581,7 +580,7 @@ public:
     exp_res.model_size = nfl.model_size();
     exp_res.index_size = nfl.index_size();
     if (show_stat) {
-      nfl.PrintStat();
+      nfl.print_stats();
     }
   }
 };

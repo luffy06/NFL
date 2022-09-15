@@ -3,7 +3,7 @@
 
 #include "util/common.h"
 
-namespace kvevaluator {
+namespace nfl {
 
 template<class KT>
 class LinearModel {
@@ -13,11 +13,11 @@ class LinearModel {
 
   LinearModel() : slope_(0), intercept_(0) { }
 
-  inline long long Predict(KT key) const {
-    return static_cast<long long>(std::floor(slope_ * key + intercept_));
+  inline int64_t predict(KT key) const {
+    return static_cast<int64_t>(std::floor(slope_ * key + intercept_));
   }
 
-  inline double PredictDouble(KT key) const {
+  inline double predict_double(KT key) const {
     return slope_ * static_cast<double>(key) + intercept_;
   }
 };
@@ -41,7 +41,7 @@ class LinearModelBuilder {
                       y_min_(std::numeric_limits<double>::max()), 
                       y_max_(std::numeric_limits<double>::lowest()) { }
 
-  inline void Add(KT x, double y) {
+  inline void add(KT x, double y) {
     count_++;
     x_sum_ += static_cast<double>(x);
     y_sum_ += static_cast<double>(y);
@@ -55,7 +55,7 @@ class LinearModelBuilder {
 
   // TODO: the calculated slope or intercept is too small or too large, the 
   // precision is lost.
-  void Build(LinearModel<KT> *lrm) {
+  void build(LinearModel<KT> *lrm) {
     if (count_ <= 1) {
       lrm->slope_ = 0;
       lrm->intercept_ = static_cast<double>(y_sum_);

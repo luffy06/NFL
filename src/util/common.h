@@ -25,14 +25,10 @@
 #include <string>
 #include <vector>
 
-#define COLLECT_STAT 0
-
 const long long kSEED = 1e9 + 7;
 const int kINF = 0x7fffffff;
 
-namespace kvevaluator {
-
-double DEBUG_KEY;
+namespace nfl {
 
 enum OperationType {
   kBulkLoad = 0,
@@ -48,7 +44,7 @@ struct Request {
   std::pair<KT, VT> kv;
 };
 
-inline void ASSERT(bool condition, const std::string& error_msg) {
+inline void assert_p(bool condition, const std::string& error_msg) {
   if (!condition) {
     std::cerr << error_msg << std::endl;
     exit(-1);
@@ -56,7 +52,7 @@ inline void ASSERT(bool condition, const std::string& error_msg) {
 }
 
 template<typename T>
-inline bool EQ(const T& a, const T& b) {
+inline bool compare(const T& a, const T& b) {
   if (std::numeric_limits<T>::is_integer) {
     return a == b;
   } else {
@@ -65,7 +61,7 @@ inline bool EQ(const T& a, const T& b) {
 }
 
 template<typename T>
-std::string STR(T n) {
+std::string str(T n) {
   std::stringstream ss;
   ss << std::setprecision(std::numeric_limits<T>::digits10) << std::fixed << n;
   std::string n_str = ss.str();
@@ -81,18 +77,18 @@ std::string STR(T n) {
 }
 
 template<typename T, typename P>
-P STRTONUM(T s) {
-  std::string str = STR<T>(s);
+P ston(T s) {
+  std::string ss = str<T>(s);
   P v = 0;
   int point = -1;
-  bool negative = (str[0] == '-');
-  for (int i = (negative ? 1 : 0); i < str.size(); ++ i) {
-    if (str[i] >= '0' && str[i] <= '9') {
-      v = v * 10 + (str[i] - '0');
-    } else if (point == -1 && str[i] == '.') {
-      point = str.size() - i - 1;
+  bool negative = (ss[0] == '-');
+  for (int i = (negative ? 1 : 0); i < ss.size(); ++ i) {
+    if (ss[i] >= '0' && ss[i] <= '9') {
+      v = v * 10 + (ss[i] - '0');
+    } else if (point == -1 && ss[i] == '.') {
+      point = ss.size() - i - 1;
     } else {
-      ASSERT(false, str + " is not a number");
+      assert_p(false, ss + " is not a number");
     }
   }
   for (int i = 0; i < point; ++ i) {
@@ -104,7 +100,7 @@ P STRTONUM(T s) {
   return v;
 }
 
-bool StartWith(std::string src, std::string target) {
+bool start_with(std::string src, std::string target) {
   if (src.size() >= target.size()) {
     for (int i = 0; i < target.size(); ++ i) {
       if (src[i] != target[i]) {
@@ -117,7 +113,7 @@ bool StartWith(std::string src, std::string target) {
 }
 
 template<typename T>
-void Shuffle(std::vector<T>& kvs, int l, int r) {
+void shuffle(std::vector<T>& kvs, int l, int r) {
   std::mt19937_64 gen(kSEED);
   for (int i = l; i < r; ++ i) {
     long long rv = gen();
@@ -126,7 +122,7 @@ void Shuffle(std::vector<T>& kvs, int l, int r) {
   }
 }
 
-std::string GetWorkloadName(std::string workload_path) {
+std::string get_workload_name(std::string workload_path) {
   int l = 0;
   int r = workload_path.size();
   for (int i = r; i >= 0; -- i) {
@@ -143,7 +139,7 @@ std::string GetWorkloadName(std::string workload_path) {
   return workload_path.substr(l, r - l);
 }
 
-std::string PathJoin(std::string patha, std::string pathb) {
+std::string path_join(std::string patha, std::string pathb) {
   int idxa = patha.size() - 1;
   while (idxa > 0 && patha[idxa] == '/') {
     idxa --;
@@ -162,16 +158,6 @@ std::string PathJoin(std::string patha, std::string pathb) {
     return patha.substr(0, idxa + 1) + "/" 
             + pathb.substr(idxb, pathb.size() - idxb);
   }
-}
-
-template<typename KT, typename VT>
-int HasDebugKey(const std::pair<KT, VT>* kvs, uint32_t size) {
-  for (uint32_t i = 0; i < size; ++ i) {
-    if (EQ(kvs[i].first, DEBUG_KEY)) {
-      return i;
-    }
-  }
-  return -1;
 }
 
 struct TreeStat {
@@ -317,7 +303,7 @@ struct ExperimentalResults {
   }
 
   void show_incremental_throughputs() {
-    ASSERT(latencies.size() == need_compute.size(), "Internal Error");
+    assert_p(latencies.size() == need_compute.size(), "Internal Error");
     double sum_latency = 0;
     uint32_t num_ops = 0;
     for (uint32_t i = 0; i < latencies.size(); ++ i) {

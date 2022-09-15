@@ -6,7 +6,7 @@
 #include <mkl.h>
 #include <mkl_cblas.h>
 
-namespace kvevaluator {
+namespace nfl {
 
 template<typename KT, typename VT>
 class BNAF_Infer {
@@ -73,22 +73,22 @@ public:
     outputs_[1] = (double*)mkl_calloc(batch_size_ * hidden_dim_, sizeof(double), 64);
   }
 
-  void Transform(KKVT* tran_kvs, uint32_t size) {
-    PrepareInputs(tran_kvs, size);
-    Forward();
-    PrepareOutputs(tran_kvs, size);
+  void transform(KKVT* tran_kvs, uint32_t size) {
+    prepare_inputs(tran_kvs, size);
+    forward();
+    prepare_outputs(tran_kvs, size);
   }
-  void PrintParameters() {
+  void print_parameters() {
     std::cout << "Layers\t" << num_layers_ << std::endl;
     std::cout << "Input Dim\t" << in_dim_ << std::endl;
     std::cout << "Hidden Dim\t" << hidden_dim_ << std::endl;
     for (int i = 0; i < num_layers_; ++ i) {
-      PrintWeightMatrix(i);
+      print_weight_matrix(i);
     }
   }
 
 private:
-  void PrepareInputs(const KKVT* tran_kvs, uint32_t size) {
+  void prepare_inputs(const KKVT* tran_kvs, uint32_t size) {
     if (in_dim_ == 1) {
       for (uint32_t i = 0; i < size; ++ i) {
         inputs_[i] = tran_kvs[i].first;
@@ -112,7 +112,7 @@ private:
     }
   }
 
-  void PrepareOutputs(KKVT* tran_kvs, uint32_t size) {
+  void prepare_outputs(KKVT* tran_kvs, uint32_t size) {
     if (in_dim_ == 1) {
       for (uint32_t i = 0; i < size; ++ i) {
         tran_kvs[i] = {inputs_[i], tran_kvs[i].second};
@@ -131,8 +131,8 @@ private:
     }
   }
 
-  void Forward() {
-    // PrintOutput(-1, inputs_, batch_size_, in_dim_);
+  void forward() {
+    // print_outputs(-1, inputs_, batch_size_, in_dim_);
     // Compute the formula: 
     //            alpha * mat_a [m * k] * mat_b [k * n] + beta * mat_c [m * n]
     // cblas_dgemm(layout, trans_a, trans_b, m, n, k, alpha, mat_a, lda, 
@@ -144,10 +144,10 @@ private:
                 1, inputs_, in_dim_, 
                 weights_[0], hidden_dim_, 
                 0, outputs_[0], hidden_dim_);
-    // PrintWeightMatrix(0);
-    // PrintOutput(0, outputs_[0], batch_size_, hidden_dim_);
+    // print_weight_matrix(0);
+    // print_outputs(0, outputs_[0], batch_size_, hidden_dim_);
     vdTanh(batch_size_ * hidden_dim_, outputs_[0], outputs_[1]);
-    // PrintOutput(0, outputs_[1], batch_size_, hidden_dim_);
+    // print_outputs(0, outputs_[1], batch_size_, hidden_dim_);
     for (int i = 1; i < num_layers_ - 1; ++ i) {
       // IN [batch_size_ * hidden_dim] * W_i [hidden_dim * hidden_dim] = 
       // OUT [batch_size_ * hidden_dim]
@@ -156,10 +156,10 @@ private:
                   1, outputs_[1], hidden_dim_, 
                   weights_[i], hidden_dim_, 
                   0, outputs_[0], hidden_dim_);
-      // PrintWeightMatrix(i);
-      // PrintOutput(i, outputs_[0], batch_size_, hidden_dim_);      
+      // print_weight_matrix(i);
+      // print_outputs(i, outputs_[0], batch_size_, hidden_dim_);      
       vdTanh(batch_size_ * hidden_dim_, outputs_[0], outputs_[1]);
-      // PrintOutput(i, outputs_[1], batch_size_, hidden_dim_);      
+      // print_outputs(i, outputs_[1], batch_size_, hidden_dim_);      
     }
     // IN [batch_size_ * hidden_dim] * W_L [hidden_dim * in_dim] = 
     // OUT [batch_size_ * in_dim]
@@ -168,11 +168,11 @@ private:
                 1, outputs_[1], hidden_dim_, 
                 weights_[num_layers_ - 1], in_dim_, 
                 0, inputs_, in_dim_);
-    // PrintWeightMatrix(num_layers_);
-    // PrintOutput(num_layers_, inputs_, batch_size_, in_dim_);
+    // print_weight_matrix(num_layers_);
+    // print_outputs(num_layers_, inputs_, batch_size_, in_dim_);
   }
 
-  void PrintWeightMatrix(int l) {
+  void print_weight_matrix(int l) {
     if (l == 0) {
       std::cout << std::fixed << "Weight (0)" << std::endl;
       for (int i = 0; i < in_dim_; ++ i) {
@@ -200,7 +200,7 @@ private:
     }
   }
 
-  void PrintOutput(int idx, double* outputs, int num_rows, int num_columns) {
+  void print_outputs(int idx, double* outputs, int num_rows, int num_columns) {
     if (idx == -1) {
       std::cout << "Input" << std::endl;
     } else {
