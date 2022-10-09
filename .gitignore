@@ -10,3 +10,9 @@
 /lib/PGM-index
 /lib/BTree
 /lib/YCSB
+/train/checkpoint
+/train/data
+/train/__pycache__
+/train/models/__pycache__
+/train/models/BNAF/__pycache__
+.vscode

@@ -13,9 +13,9 @@ void write_workload_keys(std::string workload_path,
   std::vector<std::pair<KT, VT>> init_data;
   std::vector<Request<KT, VT>> run_reqs;
   load_data(workload_path, init_data, run_reqs);
-  std::string output_path = flow_input_dir + workload_name + 
+  std::string output_path = path_join(flow_input_dir, workload_name + 
                             (std::fabs(prop - 1) < 1e-3 ? "" : "-small") + 
-                            "-training.txt";
+                            "-training.txt");
   std::ofstream out(output_path, std::ios::out);
   if (!out.is_open()) {
     std::cout << "File [" << output_path << "] does not exist" << std::endl;
@@ -39,8 +39,8 @@ int main(int argc, char* argv[]) {
   }
   std::string workload_path = std::string(argv[1]);
   std::string key_type = std::string(argv[2]);
-  std::string flow_input_dir = std::string(argv[3]);
-  double prop = ston<char*, int>(argv[4]) / 100.;
+  double prop = ston<char*, int>(argv[3]) / 100.;
+  std::string flow_input_dir = std::string(argv[4]);
   if (key_type == "float64") {
     write_workload_keys<double, long long>(workload_path, flow_input_dir, prop);
   } else {

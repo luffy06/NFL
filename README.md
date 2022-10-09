@@ -38,6 +38,20 @@ Clearing.
 $ bash scripts/clear.sh
 ```
 
+# Training
+
+To train our numerical flowl, please follow the guideline in the `train` directory.
+
+First, run the script to generate training data for the flow.
+```bash
+$ bash scripts/prepare_keys_for_flows.sh
+```
+
+Then, run the script in the `train` directory.
+```bash
+$ bash train/train_flow.sh
+```
+
 # Results
 
 The results are shown in the following format.
