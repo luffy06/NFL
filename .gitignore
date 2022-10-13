@@ -4,6 +4,7 @@
 /workloads/
 /flow_input/
 /configs/
+/flow_weights
 /results/
 /lib/ALEX
 /lib/lipp
