@@ -1,7 +1,6 @@
 import ot
 import torch
 from models import *
-# from train.data_util import print_tensor
 
 class KernelEncoder(torch.nn.Module):
   def __init__(self, kernel_func_list):
